@@ -1,0 +1,233 @@
+import React from 'react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import '@testing-library/jest-dom';
+import ExecutionsPage from '../page';
+import { executionHistoryApi, scheduleApi } from '@/lib/api';
+
+// Add these additional tests to the existing test file
+
+describe('ExecutionsPage Additional Tests', () => {
+  // Test for getStatusBadge function
+  it('should render different status badges correctly', async () => {
+    // Mock successful API responses
+    (scheduleApi.getById as jest.Mock).mockResolvedValue({ 
+      data: mockSchedule 
+    });
+    
+    // Create mock executions with different statuses
+    const mockStatusExecutions = [
+      {
+        id: 'exec1',
+        scheduleId: '123',
+        executionTime: '2025-04-28T12:00:00Z',
+        responseUrl: 'https://example.com/response/1',
+        status: 'success',
+        retryCount: 0,
+      },
+      {
+        id: 'exec2',
+        scheduleId: '123',
+        executionTime: '2025-04-28T13:00:00Z',
+        responseUrl: 'https://example.com/response/2',
+        status: 'failed',
+        retryCount: 1,
+        errorMessage: 'Test error message',
+      },
+      {
+        id: 'exec3',
+        scheduleId: '123',
+        executionTime: '2025-04-28T14:00:00Z',
+        responseUrl: 'https://example.com/response/3',
+        status: 'retrying',
+        retryCount: 2,
+      },
+      {
+        id: 'exec4',
+        scheduleId: '123',
+        executionTime: '2025-04-28T15:00:00Z',
+        responseUrl: 'https://example.com/response/4',
+        status: 'unknown',
+        retryCount: 0,
+      },
+    ];
+    
+    (executionHistoryApi.getByScheduleId as jest.Mock).mockResolvedValue({ 
+      data: mockStatusExecutions 
+    });
+    
+    // Set up window.location.pathname to include scheduleId
+    Object.defineProperty(window, 'location', {
+      value: {
+        pathname: '/executions/123',
+        search: '',
+      },
+      writable: true,
+    });
+    
+    render(<ExecutionsPage />);
+    
+    // Wait for loading to complete
+    await waitFor(() => {
+      const backdrop = screen.queryByText('Processing...');
+      expect(backdrop).not.toBeInTheDocument();
+    });
+    
+    // Switch to executions tab
+    fireEvent.click(screen.getByRole('tab', { name: /execution history/i }));
+    
+    // Check for all status badges
+    expect(screen.getByText('Success')).toBeInTheDocument();
+    expect(screen.getByText('Failed')).toBeInTheDocument();
+    expect(screen.getByText('Retrying')).toBeInTheDocument();
+    expect(screen.getByText('unknown')).toBeInTheDocument();
+  });
+
+  // Test for search functionality
+  it('should filter executions by error message', async () => {
+    // Mock successful API responses
+    (scheduleApi.getById as jest.Mock).mockResolvedValue({ 
+      data: mockSchedule 
+    });
+    
+    const mockErrorExecutions = [
+      {
+        id: 'exec1',
+        scheduleId: '123',
+        executionTime: '2025-04-28T12:00:00Z',
+        responseUrl: 'https://example.com/response/1',
+        status: 'success',
+        retryCount: 0,
+      },
+      {
+        id: 'exec2',
+        scheduleId: '123',
+        executionTime: '2025-04-28T13:00:00Z',
+        responseUrl: 'https://example.com/response/2',
+        status: 'failed',
+        retryCount: 1,
+        errorMessage: 'Connection timeout',
+      },
+      {
+        id: 'exec3',
+        scheduleId: '123',
+        executionTime: '2025-04-28T14:00:00Z',
+        responseUrl: 'https://example.com/response/3',
+        status: 'failed',
+        retryCount: 2,
+        errorMessage: 'Invalid request format',
+      },
+    ];
+    
+    (executionHistoryApi.getByScheduleId as jest.Mock).mockResolvedValue({ 
+      data: mockErrorExecutions 
+    });
+    
+    // Set up window.location.pathname to include scheduleId
+    Object.defineProperty(window, 'location', {
+      value: {
+        pathname: '/executions/123',
+        search: '',
+      },
+      writable: true,
+    });
+    
+    render(<ExecutionsPage />);
+    
+    // Wait for loading to complete
+    await waitFor(() => {
+      const backdrop = screen.queryByText('Processing...');
+      expect(backdrop).not.toBeInTheDocument();
+    });
+    
+    // Switch to executions tab
+    fireEvent.click(screen.getByRole('tab', { name: /execution history/i }));
+    
+    // Search for "timeout" in error messages
+    const searchInput = screen.getByPlaceholderText('Search executions by status or response URL...');
+    fireEvent.change(searchInput, { target: { value: 'timeout' } });
+    
+    // Should only show the execution with "Connection timeout" error
+    await waitFor(() => {
+      expect(screen.getByText('Connection timeout')).toBeInTheDocument();
+      expect(screen.queryByText('Invalid request format')).not.toBeInTheDocument();
+    });
+  });
+
+  // Test for tab switching
+  it('should switch between tabs and maintain state', async () => {
+    // Mock successful API responses
+    (scheduleApi.getById as jest.Mock).mockResolvedValue({ 
+      data: mockSchedule 
+    });
+    (executionHistoryApi.getByScheduleId as jest.Mock).mockResolvedValue({ 
+      data: mockExecutions 
+    });
+    
+    // Set up window.location.pathname to include scheduleId
+    Object.defineProperty(window, 'location', {
+      value: {
+        pathname: '/executions/123',
+        search: '',
+      },
+      writable: true,
+    });
+    
+    render(<ExecutionsPage />);
+    
+    // Wait for loading to complete
+    await waitFor(() => {
+      const backdrop = screen.queryByText('Processing...');
+      expect(backdrop).not.toBeInTheDocument();
+    });
+    
+    // Verify we're on the details tab by default
+    expect(screen.getByText('Basic Information')).toBeInTheDocument();
+    
+    // Switch to executions tab
+    fireEvent.click(screen.getByRole('tab', { name: /execution history/i }));
+    
+    // Verify we're on the executions tab
+    expect(screen.getByPlaceholderText('Search executions by status or response URL...')).toBeInTheDocument();
+    
+    // Switch back to details tab
+    fireEvent.click(screen.getByRole('tab', { name: /schedule details/i }));
+    
+    // Verify we're back on the details tab
+    expect(screen.getByText('Basic Information')).toBeInTheDocument();
+  });
+
+  // Test for empty executions list
+  it('should display message when no executions are available', async () => {
+    // Mock successful API responses
+    (scheduleApi.getById as jest.Mock).mockResolvedValue({ 
+      data: mockSchedule 
+    });
+    (executionHistoryApi.getByScheduleId as jest.Mock).mockResolvedValue({ 
+      data: [] 
+    });
+    
+    // Set up window.location.pathname to include scheduleId
+    Object.defineProperty(window, 'location', {
+      value: {
+        pathname: '/executions/123',
+        search: '',
+      },
+      writable: true,
+    });
+    
+    render(<ExecutionsPage />);
+    
+    // Wait for loading to complete
+    await waitFor(() => {
+      const backdrop = screen.queryByText('Processing...');
+      expect(backdrop).not.toBeInTheDocument();
+    });
+    
+    // Switch to executions tab
+    fireEvent.click(screen.getByRole('tab', { name: /execution history/i }));
+    
+    // Verify empty state message
+    expect(screen.getByText('No execution history available')).toBeInTheDocument();
+    expect(screen.getByText('This schedule has not been executed yet')).toBeInTheDocument();
+  });
+});
